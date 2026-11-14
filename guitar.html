@@ -1,0 +1,666 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Guitar Chords</title>
+	<style>
+		.container {
+			max-width: 1280px;
+			margin: 0 auto;
+		}
+		hr {
+			margin: 15px 0;
+		}
+		#header {
+			display: flex;
+			justify-content: space-between;
+			background: #bccfdc;
+			box-shadow: inset 0 0 15px #eef3f6aa, 3px 3px 8px #45698277;
+			width: 100%;
+			padding: 10px 0;
+		}
+		#header_left {
+			display: flex;
+			align-items: center;
+			padding: 0 30px
+		}
+		#header_logo {
+			width: 45px;
+			height: 45px;
+			object-fit: contain;
+		}
+		#header_title {
+			margin: 0;
+			font-size: 28px;
+			color: #456982;
+		}
+		#symbol_toggle {
+			position: absolute;
+			width: 1px;
+			height: 1px;
+			overflow: hidden;
+			clip: rect(0 0 0 0);
+			white-space: nowrap;
+		}
+		.symbol-toggle {
+			position: relative;
+			display: block;
+			width: 78px;
+			height: 40px;
+			margin: 0 20px 0 0;
+			border-radius: 999px;
+			background: #5b89a9;
+			box-shadow: inset 0 0 5px #eef3f6aa, 3px 3px 8px #45698277;
+			cursor: pointer;
+		}
+		.symbol-toggle::after {
+			content: "#";
+			position: absolute;
+			top: 4px;
+			left: 4px;
+			display: grid;
+			width: 32px;
+			height: 32px;
+			place-items: center;
+			border-radius: 50%;
+			background: #e8f1f6;
+			color: #5b89a9;
+			font-size: 20px;
+			font-weight: bold;
+			transition: transform 180ms ease, content 0s 90ms;
+		}
+		#symbol_toggle:not(:checked) + .symbol-toggle::after {
+			content: "♭";
+			transform: translateX(38px);
+		}
+		#guide {
+			display: flex;
+			align-items: center;
+			gap: 5px;
+			padding: 7px 20px;
+			margin: 20px;
+			font-size: 16px;
+			color: #ffffff;
+			border:3.5px solid #ffffff00;
+			box-shadow: inset 0 0 0 1px #ffffff, 3px 3px 8px #45698277;
+			background: #5b89a9;
+		}
+		.step {
+			font-weight: bold;
+			padding: 3px 5px;
+			border-bottom: 1.5px solid #ffffff;
+			cursor: default;
+		}
+		#supplement {
+			font-size: 13px;
+			margin-left: 20px;
+		}
+		@keyframes guideBlink {
+			0%, 100% {
+				outline: 3px solid transparent;
+			}
+			50% {
+				outline: 3px solid #5b89a9;
+			}
+		}
+		.blinking {
+			animation: guideBlink 0.8s ease-in-out infinite;
+		}
+		#chord_layout {
+			display: grid;
+			grid-template-columns: 920px 110px 110px;
+			grid-template-rows: auto auto;
+			gap: 10px;
+			align-items: flex-start;
+		}
+		#guitar_chord {
+			position: relative;
+			grid-area: 1 / 1 / 2 / 2;
+			margin: 10px 60px;
+		}
+		#guitar_fingerboard {
+			display: block;
+		}
+		.chord-options {
+			border: 0;
+			margin: 0;
+			padding: 0 10px;
+		}
+		.chord-options legend {
+			font-weight: bold;
+			text-align: center;
+		}
+		.chord-options label {
+			display: block;
+			box-sizing: border-box;
+			font-size: 16px;
+			min-width: 92px;
+			min-height: 32px;
+			margin: 4px 0;
+			padding: 2px 8px;
+			border: 1.3px solid #bccfdc;
+			background: #ffffff;
+			text-align: center;
+			cursor: pointer;
+		}
+		.chord-options label:has(input:checked) {
+			color: #ffffff;
+			border-color: #bccfdc;
+			background: #5b89a9;
+		}
+		.chord-options label:hover {
+			border-color: #5b89a9;
+			background: #e8f1f6;
+		}
+		.chord-options input {
+			position: absolute;
+			opacity: 0;
+		}		
+		#root_select {
+			grid-area: 1 / 2 / 3 / 3;
+			margin-left: 65px;
+		}
+		#type_select {
+			grid-area: 1 / 3 / 3 / 4;
+			margin-left: 55px;
+		}
+		#chord_play {
+			grid-area: 2 / 1 / 3 / 2;
+			display: flex;
+			align-items: center;
+			gap: 22px;
+			margin: 0 50px 0 100px;
+		}
+		#chord_name {
+			font-size:24px;
+			padding:3px;
+			font-weight:bold;
+			flex: 1;
+		}
+		#play_button, #clear_button {
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			gap: 6px;
+			color: #ffffff;
+			font-size: 18px;
+			padding: 8px 22px;
+			border: none;
+			border-radius: 3px;
+			cursor: pointer;
+		}
+		#play_button img, #clear_button img {
+			width: 18px;
+			height: 18px;
+			object-fit: contain;
+		}
+		#play_button {
+			background: #5b89a9;
+		}
+		#clear_button {
+			background: #bccfdc;
+		}
+		#play_button:hover {
+			background: #456982;
+		}
+		#clear_button:hover {
+			background: #94b2c7;
+		}
+	</style>
+	<script type="text/javascript">
+		var width = 900;
+		
+		// 開放弦の音
+		var openStrings = ["E", "B", "G", "D", "A", "E"];
+		// 12音
+		var chromaticNotes = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+		var flatNotes = ["C", "D♭", "D", "E♭", "E", "F", "G♭", "G", "A♭", "A", "B♭", "B"];
+		// 1弦-6弦のy座標
+		var stringY = [5, 55, 105, 155, 205, 255];
+		// 0-12フレットのx座標
+		var fretX = [27, 77, 138, 205, 272, 340, 407, 472, 539, 605, 672, 740, 807];
+		// [1弦, 2弦, 3弦, 4弦, 5弦, 6弦]、0：開放、-1：ミュート
+		var chords = {
+		"C": [0, 1, 0, 2, 3, -1],
+		"Cm": [3, 4, 5, 5, 3, -1],
+		"CM7": [0, 0, 0, 2, 3, -1],
+		"C7": [3, 5, 3, 5, 3, -1],
+		"Cm7": [3, 4, 3, 5, 3, -1],
+		"Cm(♭5)": [-1, 4, 5, 4, 3, -1],
+		"Cm7(♭5)": [-1, 4, 3, 4, 3, -1],
+		"Csus4": [1, 1, 0, 3, 3, -1],
+		"C7sus4": [3, 6, 3, 5, 3, -1],
+		"C6": [5, 5, 5, 5, 3, -1],
+		"Cm6": [3, 1, 2, 1, 3, -1],
+		"Cdim7": [-1, 4, 2, 4, 3, -1],
+		"C#": [4, 6, 6, 6, 4, -1],
+		"C#m": [4, 5, 6, 6, 4, -1],
+		"C#M7": [4, 6, 5, 6, 4, -1],
+		"C#7": [4, 6, 4, 6, 4, -1],
+		"C#m7": [4, 5, 4, 6, 4, -1],
+		"C#m(♭5)": [-1, 5, 6, 5, 4, -1],
+		"C#m7(♭5)": [-1, 5, 4, 5, 4, -1],
+		"C#sus4": [4, 7, 6, 6, 4, -1],
+		"C#7sus4": [4, 7, 4, 6, 4, -1],
+		"C#6": [6, 6, 6, 6, 4, -1],
+		"C#m6": [4, 2, 3, 2, 4, -1],
+		"C#dim7": [-1, 5, 3, 5, 4, -1],
+		"D": [2, 3, 2, 0, -1, -1],
+		"Dm": [1, 3, 2, 0, -1, -1],
+		"DM7": [2, 2, 2, 0, -1, -1],
+		"D7": [2, 1, 2, 0, -1, -1],
+		"Dm7": [1, 1, 2, 0, -1, -1],
+		"Dm(♭5)": [1, 3, 1, 0, -1, -1],
+		"Dm7(♭5)": [1, 1, 1, 0, -1, -1],
+		"Dsus4": [3, 3, 2, 0, -1, -1],
+		"D7sus4": [3, 1, 2, 0, -1, -1],
+		"D6": [2, 0, 2, 0, -1, -1],
+		"Dm6": [1, 0, 2, 0, -1, -1],
+		"Ddim7": [1, 0, 1, 0, -1, -1],
+		"D#": [6, 8, 8, 8, 6, -1],
+		"D#m": [6, 7, 8, 8, 6, -1],
+		"D#M7": [6, 8, 7, 8, 6, -1],
+		"D#7": [6, 8, 6, 8, 6, -1],
+		"D#m7": [6, 7, 6, 8, 6, -1],
+		"D#m(♭5)": [-1, 7, 8, 7, 6, -1],
+		"D#m7(♭5)": [-1, 7, 6, 7, 6, -1],
+		"D#sus4": [6, 9, 8, 8, 6, -1],
+		"D#7sus4": [6, 9, 6, 8, 6, -1],
+		"D#6": [8, 8, 8, 8, 6, -1],
+		"D#m6": [6, 4, 5, 4, 6, -1],
+		"D#dim7": [-1, 7, 5, 7, 6, -1],
+		"E": [0, 0, 1, 2, 2, 0],
+		"Em": [0, 0, 0, 2, 2, 0],
+		"EM7": [0, 0, 1, 1, 2, 0],
+		"E7": [0, 0, 1, 0, 2, 0],
+		"Em7": [0, 0, 0, 0, 2, 0],
+		"Em(♭5)": [-1, -1, 0, 2, 1, 0],
+		"Em7(♭5)": [0, 3, 0, 2, 1, 0],
+		"Esus4": [0, 0, 2, 2, 2, 0],
+		"E7sus4": [0, 0, 2, 0, 2, 0],
+		"E6": [0, 2, 1, 2, 2, 0],
+		"Em6": [0, 2, 0, 2, 2, 0],
+		"Edim7": [0, 2, 0, 2, 1, 0],
+		"F": [1, 1, 2, 3, 3, 1],
+		"Fm": [1, 1, 1, 3, 3, 1],
+		"FM7": [1, 1, 2, 2, 3, 1],
+		"F7": [1, 1, 2, 1, 3, 1],
+		"Fm7": [1, 1, 1, 1, 3, 1],
+		"Fm(♭5)": [-1, -1, 1, 3, 2, 1],
+		"Fm7(♭5)": [-1, 0, 1, 1, -1, 1],
+		"Fsus4": [1, 1, 3, 3, 3, 1],
+		"F7sus4": [1, 1, 3, 1, 3, 1],
+		"F6": [-1, 3, 2, -1, 3, 1],
+		"Fm6": [1, 3, 1, 3, 3, 1],
+		"Fdim7": [1, 0, 1, 0, -1, 1],
+		"F#": [2, 2, 3, 4, 4, 2],
+		"F#m": [2, 2, 2, 4, 4, 2],
+		"F#M7": [2, 2, 3, 3, 4, 2],
+		"F#7": [2, 2, 3, 2, 4, 2],
+		"F#m7": [2, 2, 2, 2, 4, 2],
+		"F#m(♭5)": [-1, -1, 2, 4, 3, 2],
+		"F#m7(♭5)": [0, 1, 2, 2, -1, 2],
+		"F#sus4": [2, 2, 4, 4, 4, 2],
+		"F#7sus4": [2, 2, 4, 2, 4, 2],
+		"F#6": [-1, 2, 3, 1, 1, 2],
+		"F#m6": [2, 4, 2, 4, 4, 2],
+		"F#dim7": [-1, 1, 2, 1, -1, 2],
+		"G": [3, 0, 0, 0, 2, 3],
+		"Gm": [3, 3, 3, 5, 5, 3],
+		"GM7": [2, 0, 0, 0, 2, 3],
+		"G7": [1, 0, 0, 0, 2, 3],
+		"Gm7": [3, 3, 3, 3, 5, 3],
+		"Gm(♭5)": [-1, -1, 3, 5, 4, 3],
+		"Gm7(♭5)": [-1, 2, 3, 3, -1, 3],
+		"Gsus4": [3, 1, 0, 0, 3, 3],
+		"G7sus4": [3, 3, 5, 3, 5, 3],
+		"G6": [0, 0, 0, 0, 2, 3],
+		"Gm6": [3, 5, 3, 5, 5, 3],
+		"Gdim7": [-1, 2, 3, 2, -1, 3],
+		"G#": [4, 4, 5, 6, 6, 4],
+		"G#m": [4, 4, 4, 6, 6, 4],
+		"G#M7": [4, 4, 5, 5, 6, 4],
+		"G#7": [4, 4, 5, 4, 6, 4],
+		"G#m7": [4, 4, 4, 4, 6, 4],
+		"G#m(♭5)": [-1, 0, 4, 0, 2, 4],
+		"G#m7(♭5)": [-1, 3, 4, 4, -1, 4],
+		"G#sus4": [4, 4, 6, 6, 6, 4],
+		"G#7sus4": [4, 4, 6, 4, 6, 4],
+		"G#6": [-1, 4, 5, 3, -1, 4],
+		"G#m6": [4, 6, 4, 6, 6, 4],
+		"G#dim7": [-1, 3, 4, 3, -1, 4],
+		"A": [0, 2, 2, 2, 0, -1],
+		"Am": [0, 1, 2, 2, 0, -1],
+		"AM7": [0, 2, 1, 2, 0, -1],
+		"A7": [0, 2, 0, 2, 0, -1],
+		"Am7": [0, 1, 0, 2, 0, -1],
+		"Am(♭5)": [-1, 1, 2, 1, 0, -1],
+		"Am7(♭5)": [-1, 1, 0, 1, 0, -1],
+		"Asus4": [0, 3, 2, 2, 0, -1],
+		"A7sus4": [0, 3, 0, 2, 0, -1],
+		"A6": [2, 2, 2, 2, 0, -1],
+		"Am6": [2, 1, 2, 2, 0, -1],
+		"Adim7": [2, 1, 2, 1, 0, -1],
+		"A#": [1, 3, 3, 3, 1, -1],
+		"A#m": [1, 2, 3, 3, 1, -1],
+		"A#M7": [1, 3, 2, 3, 1, -1],
+		"A#7": [1, 3, 1, 3, 1, -1],
+		"A#m7": [1, 2, 1, 3, 1, -1],
+		"A#m(♭5)": [0, 2, 3, 2, 1, -1],
+		"A#m7(♭5)": [-1, 2, 1, 2, 1, -1],
+		"A#sus4": [1, 4, 3, 3, 1, -1],
+		"A#7sus4": [1, 4, 1, 3, 1, -1],
+		"A#6": [3, 3, 3, 3, 1, -1],
+		"A#m6": [3, 2, 0, 3, 1, -1],
+		"A#dim7": [0, 2, 0, 2, 1, -1],
+		"B": [2, 4, 4, 4, 2, -1],
+		"Bm": [2, 3, 4, 4, 2, -1],
+		"BM7": [2, 4, 3, 4, 2, -1],
+		"B7": [2, 0, 2, 1, 2, -1],
+		"Bm7": [2, 3, 2, 4, 2, -1],
+		"Bm(♭5)": [-1, 3, 4, 3, 2, -1],
+		"Bm7(♭5)": [-1, 3, 2, 3, 2, -1],
+		"Bsus4": [2, 5, 4, 4, 2, -1],
+		"B7sus4": [2, 5, 2, 4, 2, -1],
+		"B6": [4, 4, 4, 4, 2, -1],
+		"Bm6": [2, 0, 1, 0, 2, -1],
+		"Bdim7": [-1, 3, 1, 3, 2, -1]
+		};
+		
+		function getChordRoot(chordName) {
+			return chordName.charAt(1) == "#" ? chordName.substring(0, 2) : chordName.charAt(0);
+		}
+		
+		function useFlatNotation() {
+			return !document.getElementById("symbol_toggle").checked;
+		}
+		
+		function getDisplayNote(note) {
+			var noteIndex = chromaticNotes.indexOf(note);
+			return useFlatNotation() && noteIndex != -1 ? flatNotes[noteIndex] : note;
+		}
+		
+		function getDisplayChordName(chordName) {
+			var root = getChordRoot(chordName);
+			var type = chordName.substring(root.length);
+			type = type.replace(/\(♭5\)/g, "<sup>(♭5)</sup>");
+			return getDisplayNote(root) + type;
+		}
+		
+		function updateRootLabels() {
+			var rootOptions = document.querySelectorAll('#root_select input[name="root"]');
+			for (var i = 0; i < rootOptions.length; i++) {
+				rootOptions[i].nextElementSibling.innerText = getDisplayNote(rootOptions[i].value);
+			}
+		}
+		
+		function updateNotation() {
+			updateRootLabels();
+			if (recordChord) {
+				displayChord(recordChord);
+			}
+		}
+		
+		// コードの構成音を計算
+		function getChordNotes(chordName) {
+			var fingering = chords[chordName];
+			if (!fingering) {
+				return "";
+			}
+			var root = getChordRoot(chordName);
+			var notes = [];
+			for (var string = 0; string < 6; string++) {
+				var fret = fingering[string];
+				if (fret == -1) {
+					continue;
+				}
+				var openNote = openStrings[string];
+				var openIndex = chromaticNotes.indexOf(openNote);
+				var noteIndex = (openIndex + fret) % 12;
+				var note = chromaticNotes[noteIndex];
+				if (!notes.includes(note)) {
+					notes.push(note);
+				}
+			}
+			
+			var rootIndex = chromaticNotes.indexOf(root);
+			notes.sort(function(a, b) {
+				var aIndex = chromaticNotes.indexOf(a);
+				var bIndex = chromaticNotes.indexOf(b);
+				var aDistance = (aIndex - rootIndex + 12) % 12;
+				var bDistance = (bIndex - rootIndex + 12) % 12;
+				return aDistance - bDistance;
+			});
+			return notes.map(getDisplayNote).join("・");
+		}
+		
+		function main(){
+			basescene();
+		}
+		
+		var basediv;
+		
+		function basescene(){
+			basediv = document.getElementById("guitar_chord");
+			basediv.innerHTML = "<img id=\"guitar_fingerboard\" src=\"img/fingerboard.png\" width=\"900\">";
+		
+			for(var s = 0; s < 6; s++){
+				var div = document.createElement("div");
+				div.id = "marker_" + s;
+				div.style.display = "none";
+				basediv.appendChild(div);
+			}
+		}
+		
+		var recordChord;
+		var playingSounds = [];
+		var playbackId = 0;
+		var chordVolume = 0.5;
+		function stopChordSound(){
+			playbackId++;
+			for(var i = 0; i < playingSounds.length; i++){
+				playingSounds[i].pause();
+				playingSounds[i].currentTime = 0;
+			}
+			playingSounds = [];
+		}
+		
+		// 選択されたラジオボタンからコードを組み立てる
+		function updateChord(){
+			var rootOption = document.querySelector('input[name="root"]:checked');
+			var typeOption = document.querySelector('input[name="type"]:checked');
+			if (!rootOption) {
+				stopChordSound();
+				clearChordDisplay();
+				return;
+			}
+			var type = typeOption ? typeOption.value : "";
+			displayChord(rootOption.value + type);
+		}
+		
+		// コード名を画面に表示
+		function displayChord(str){
+			stopChordSound();
+			clearChordDisplay();
+			recordChord = str;  // 選択されたコードを記録
+			var chordNotes = getChordNotes(str);
+			document.getElementById("chord_name").innerHTML = getDisplayChordName(recordChord) + "　(構成音：" + chordNotes + ")";
+			var fingering = chords[str];
+			if (!fingering) {
+				return;
+			}
+			for (var s = 0; s < 6; s++) {
+				placeMarker(s, fingering[s]);
+			}
+		}
+		// コード表示だけをクリア
+		function clearChordDisplay(){
+			for(var s = 0; s < 6; s++){
+				var div = document.getElementById("marker_" + s);
+				if (div) {
+					div.style.display = "none";
+					div.innerHTML = "";
+				}
+			}
+			document.getElementById("chord_name").innerText = "コードを選択してください";
+			recordChord = null;
+		}
+		
+		// 押さえるの弦のマーカーのスタイル
+		var style_press = "display:block;position:absolute;z-index:3;width:24px;height:24px;border-radius:50%;background:#5b89a9;"
+		// 開放弦のマーカーのスタイル
+		var style_open = "display:block;position:absolute;z-index:3;width:24px;height:24px;font-size:20px;"
+		
+		// マーカーを配置する
+		function placeMarker(string, fret){
+			var div = document.getElementById("marker_" + string);
+			var left = fretX[fret == -1 ? 0 : fret];
+			var top = stringY[string];
+			if (fret == -1) {
+				div.style = style_open + "left:" + left + "px;top:" + top + "px;";
+				div.innerHTML = "✕";
+			} else if (fret == 0) {
+				div.style = style_open + "left:" + left + "px;top:" + top + "px;";
+				div.innerHTML = "◯";
+			} else {
+				div.style = style_press + "left:" + left + "px;top:" + top + "px;";
+				div.innerHTML = "";
+			}
+			div.style.display = "block";
+		}
+		
+		// リセット機能
+		function Clear(){
+			stopChordSound();
+			clearChordDisplay();
+			var rootOption = document.querySelector('input[name="root"]:checked');
+			if (rootOption) {
+				rootOption.checked = false;
+			}
+			document.querySelector('input[name="type"][value=""]').checked = true;
+		}
+		
+		function playChord() {
+			// コード未選択時にアラート表示
+			if (!recordChord) {
+				alert("コードを選択してください");
+				return;
+			}
+			stopChordSound();
+			var fingering = chords[recordChord];
+			if (!fingering) {
+				return;
+			}
+			var currentPlaybackId = playbackId;
+			var delay = 0;
+			for (var i = 5; i >= 0; i--) {
+				var fret = fingering[i];
+				if (fret == -1) {  // ミュート弦は再生しない
+					continue;
+				}
+				var stringNumber = i + 1;
+				var fret = fingering[i];
+				var filename = "audio/" + stringNumber + "_" + fret + ".wav";
+				setTimeout(function(filename, currentPlaybackId) {
+					if(currentPlaybackId != playbackId){
+						return;
+					}
+					var sound = new Audio(filename);
+					sound.volume = chordVolume;
+					playingSounds.push(sound);
+					sound.play();
+				}, delay, filename, currentPlaybackId);
+				delay += 60;
+			}
+		}
+		
+		// ページ読み込み時に表示
+		document.addEventListener('DOMContentLoaded', function() {
+			document.getElementById("chord_name").innerText = "コードを選択してください";
+			document.getElementById("symbol_toggle").addEventListener("change", updateNotation);
+			
+			var guideSteps = document.querySelectorAll(".step");
+			for (var i = 0; i < guideSteps.length; i++) {
+				guideSteps[i].addEventListener("mouseenter", function() {
+					var target = document.getElementById(this.dataset.target);
+					if (target) {
+						target.classList.add("blinking");
+					}
+				});
+				guideSteps[i].addEventListener("mouseleave", function() {
+					var target = document.getElementById(this.dataset.target);
+					if (target) {
+						target.classList.remove("blinking");
+					}
+				});
+			}
+			
+			updateRootLabels();
+		});
+	</script>
+</head>
+
+<body onload="main();">
+	<div class="container">
+		<header id="header">
+			<div id="header_left">
+				<img src="img/logo-header.png" alt="ロゴ" id="header_logo">
+				<h1 id="header_title">Guitar Chords App</h1>
+			</div>
+			<input id="symbol_toggle" type="checkbox" role="switch" checked>
+			<label class="symbol-toggle" for="symbol_toggle"></label>
+		</header>
+		<div id="guide">
+			簡単な使い方：
+			<span class="step" data-target="root_select">①ルート音を選択</span>
+			<span>→</span>
+			<span class="step" data-target="type_select">②タイプを選択</span>
+			<span>→</span>
+			<span class="step" data-target="play_button">③「Play」ボタンを押す</span>
+			<span id="supplement">※各項目にマウスを合わせると、操作する場所が点滅します。</span>
+			
+		</div>
+		
+		<div id="chord_layout">
+			<div id="guitar_chord"></div>
+			<fieldset class="chord-options" id="root_select">
+				<legend>ルート音</legend>
+				<label><input type="radio" name="root" value="C" onchange="updateChord();"><span>C</span></label>
+				<label><input type="radio" name="root" value="C#" onchange="updateChord();"><span>C#</span></label>
+				<label><input type="radio" name="root" value="D" onchange="updateChord();"><span>D</span></label>
+				<label><input type="radio" name="root" value="D#" onchange="updateChord();"><span>D#</span></label>
+				<label><input type="radio" name="root" value="E" onchange="updateChord();"><span>E</span></label>
+				<label><input type="radio" name="root" value="F" onchange="updateChord();"><span>F</span></label>
+				<label><input type="radio" name="root" value="F#" onchange="updateChord();"><span>F#</span></label>
+				<label><input type="radio" name="root" value="G" onchange="updateChord();"><span>G</span></label>
+				<label><input type="radio" name="root" value="G#" onchange="updateChord();"><span>G#</span></label>
+				<label><input type="radio" name="root" value="A" onchange="updateChord();"><span>A</span></label>
+				<label><input type="radio" name="root" value="A#" onchange="updateChord();"><span>A#</span></label>
+				<label><input type="radio" name="root" value="B" onchange="updateChord();"><span>B</span></label>
+			</fieldset>
+			<fieldset class="chord-options" id="type_select">
+				<legend>タイプ</legend>
+				<label><input type="radio" name="type" value="" onchange="updateChord();" checked>M</label>
+				<label><input type="radio" name="type" value="m" onchange="updateChord();">m</label>
+				<label><input type="radio" name="type" value="M7" onchange="updateChord();">M7</label>
+				<label><input type="radio" name="type" value="7" onchange="updateChord();">7</label>
+				<label><input type="radio" name="type" value="m7" onchange="updateChord();">m7</label>
+				<label><input type="radio" name="type" value="m(♭5)" onchange="updateChord();">m<sup>(♭5)</sup></label>
+				<label><input type="radio" name="type" value="m7(♭5)" onchange="updateChord();">m7<sup>(♭5)</sup></label>
+				<label><input type="radio" name="type" value="sus4" onchange="updateChord();">sus4</label>
+				<label><input type="radio" name="type" value="7sus4" onchange="updateChord();">7sus4</label>
+				<label><input type="radio" name="type" value="6" onchange="updateChord();">6</label>
+				<label><input type="radio" name="type" value="m6" onchange="updateChord();">m6</label>
+				<label><input type="radio" name="type" value="dim7" onchange="updateChord();">dim7</label>
+			</fieldset>
+			<div id="chord_play">
+				<div id="chord_name"></div>
+				<button type="button" onclick="playChord();" id="play_button"><img src="img/icon-play.png" alt="">Play</button>
+				<button type="button" onclick="Clear();" id="clear_button"><img src="img/icon-clear.png" alt="">Clear</button>
+			</div>
+		</div>
+		<hr>
+	</div>
+</body>
+</html>
