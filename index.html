@@ -454,16 +454,32 @@
 		}
 		
 		var recordChord;
+		var audioContext;
+		var audioBufferCache = {};
 		var playingSounds = [];
 		var playbackId = 0;
 		var chordVolume = 0.5;
+		
 		function stopChordSound(){
 			playbackId++;
 			for(var i = 0; i < playingSounds.length; i++){
-				playingSounds[i].pause();
-				playingSounds[i].currentTime = 0;
+				try {
+					playingSounds[i].stop();
+				} catch (e) {
+				}
 			}
 			playingSounds = [];
+		}
+		
+		async function loadAudioBuffer(filename) {
+			if (audioBufferCache[filename]) {
+				return audioBufferCache[filename];
+			}
+			var response = await fetch(filename);
+			var arrayBuffer = await response.arrayBuffer();
+			var audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+			audioBufferCache[filename] = audioBuffer;
+			return audioBuffer;
 		}
 		
 		// 選択されたラジオボタンからコードを組み立てる
@@ -541,37 +557,53 @@
 			document.querySelector('input[name="type"][value=""]').checked = true;
 		}
 		
-		function playChord() {
+		async function playChord() {
 			// コード未選択時にアラート表示
 			if (!recordChord) {
 				alert("コードを選択してください");
 				return;
 			}
 			stopChordSound();
+			// AudioContextを初期化
+			if (!audioContext) {
+				audioContext = new (window.AudioContext || window.webkitAudioContext)();
+			}
+			await audioContext.resume();
+			var currentPlaybackId = playbackId;
 			var fingering = chords[recordChord];
 			if (!fingering) {
 				return;
 			}
-			var currentPlaybackId = playbackId;
-			var delay = 0;
-			for (var i = 5; i >= 0; i--) {
-				var fret = fingering[i];
-				if (fret == -1) {  // ミュート弦は再生しない
-					continue;
-				}
-				var stringNumber = i + 1;
-				var fret = fingering[i];
-				var filename = "audio/" + stringNumber + "_" + fret + ".wav";
-				setTimeout(function(filename, currentPlaybackId) {
-					if(currentPlaybackId != playbackId){
-						return;
+			try {
+        var sounds = [];
+				// 6弦から1弦の順番で音声ファイルを読み込む
+				for (var i = 5; i >= 0; i--) {
+					var fret = fingering[i];
+					if (fret == -1) {
+						continue;
 					}
-					var sound = new Audio(filename);
-					sound.volume = chordVolume;
-					playingSounds.push(sound);
-					sound.play();
-				}, delay, filename, currentPlaybackId);
-				delay += 60;
+					var stringNumber = i + 1;
+					var filename = "audio/" + stringNumber + "_" + fret + ".wav";
+					sounds.push({
+						buffer: await loadAudioBuffer(filename)
+					});
+				}
+        if (currentPlaybackId != playbackId) {
+            return;
+        }
+				var startTime = audioContext.currentTime + 0.05;
+				sounds.forEach(function(item, index) {
+					var source = audioContext.createBufferSource();
+					var gainNode = audioContext.createGain();
+					source.buffer = item.buffer;
+					gainNode.gain.value = chordVolume;
+					source.connect(gainNode);
+					gainNode.connect(audioContext.destination);
+					source.start(startTime + index * 0.06);
+					playingSources.push(source);
+        });
+			} catch (error) {
+				console.error("音声再生エラー:", error);
 			}
 		}
 		
