@@ -454,32 +454,40 @@
 		}
 		
 		var recordChord;
-		var audioContext;
-		var audioBufferCache = {};
 		var playingSounds = [];
 		var playbackId = 0;
 		var chordVolume = 0.5;
-		
+		var audioContext;
+		var audioBuffers = {};
+		function loadAudioBuffer(filename) {
+			if (!audioBuffers[filename]) {
+				audioBuffers[filename] = fetch(filename)
+					.then(function(response) {
+						if (!response.ok) {
+							throw new Error("音源を読み込めません: " + filename);
+						}
+						return response.arrayBuffer();
+					})
+					.then(function(data) {
+						return audioContext.decodeAudioData(data);
+					})
+					.catch(function(error) {
+						delete audioBuffers[filename];
+						throw error;
+					});
+			}
+			return audioBuffers[filename];
+		}
 		function stopChordSound(){
 			playbackId++;
 			for(var i = 0; i < playingSounds.length; i++){
 				try {
 					playingSounds[i].stop();
-				} catch (e) {
+				} catch (error) {
+					// すでに停止した音源は無視
 				}
 			}
 			playingSounds = [];
-		}
-		
-		async function loadAudioBuffer(filename) {
-			if (audioBufferCache[filename]) {
-				return audioBufferCache[filename];
-			}
-			var response = await fetch(filename);
-			var arrayBuffer = await response.arrayBuffer();
-			var audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
-			audioBufferCache[filename] = audioBuffer;
-			return audioBuffer;
 		}
 		
 		// 選択されたラジオボタンからコードを組み立てる
@@ -564,46 +572,45 @@
 				return;
 			}
 			stopChordSound();
-			// AudioContextを初期化
-			if (!audioContext) {
-				audioContext = new (window.AudioContext || window.webkitAudioContext)();
-			}
-			await audioContext.resume();
-			var currentPlaybackId = playbackId;
 			var fingering = chords[recordChord];
 			if (!fingering) {
 				return;
 			}
-			try {
-        var sounds = [];
-				// 6弦から1弦の順番で音声ファイルを読み込む
-				for (var i = 5; i >= 0; i--) {
-					var fret = fingering[i];
-					if (fret == -1) {
-						continue;
-					}
-					var stringNumber = i + 1;
-					var filename = "audio/" + stringNumber + "_" + fret + ".wav";
-					sounds.push({
-						buffer: await loadAudioBuffer(filename)
-					});
+			var currentPlaybackId = playbackId;
+			var filenames = [];
+			for (var i = 5; i >= 0; i--) {
+				var fret = fingering[i];
+				if (fret == -1) {  // ミュート弦は再生しない
+					continue;
 				}
-        if (currentPlaybackId != playbackId) {
-            return;
-        }
+				var stringNumber = i + 1;
+				filenames.push("audio/" + stringNumber + "_" + fret + ".wav");
+			}
+			try {
+				if (!audioContext) {
+					audioContext = new (window.AudioContext || window.webkitAudioContext)();
+				}
+				await audioContext.resume();
+				var buffers = await Promise.all(filenames.map(loadAudioBuffer));
+				if (currentPlaybackId != playbackId) {
+					return;
+				}
 				var startTime = audioContext.currentTime + 0.05;
-				sounds.forEach(function(item, index) {
+				for (var j = 0; j < buffers.length; j++) {
 					var source = audioContext.createBufferSource();
-					var gainNode = audioContext.createGain();
-					source.buffer = item.buffer;
-					gainNode.gain.value = chordVolume;
-					source.connect(gainNode);
-					gainNode.connect(audioContext.destination);
-					source.start(startTime + index * 0.06);
-					playingSources.push(source);
-        });
+					var gain = audioContext.createGain();
+					source.buffer = buffers[j];
+					gain.gain.value = chordVolume;
+					source.connect(gain);
+					gain.connect(audioContext.destination);
+					playingSounds.push(source);
+					source.start(startTime + j * 0.06);
+				}
 			} catch (error) {
-				console.error("音声再生エラー:", error);
+				if (currentPlaybackId == playbackId) {
+					console.error(error);
+					alert("音源を読み込めませんでした。ページを再読み込みしてお試しください。");
+				}
 			}
 		}
 		
