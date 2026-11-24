@@ -204,6 +204,10 @@
 		#play_button:hover {
 			background: #456982;
 		}
+		#play_button:disabled {
+			background: #94b2c7;
+			cursor: wait;
+		}
 		#clear_button:hover {
 			background: #94b2c7;
 		}
@@ -454,40 +458,68 @@
 		}
 		
 		var recordChord;
-		var playingSounds = [];
-		var playbackId = 0;
+		var playingSources = [];
 		var chordVolume = 0.5;
-		var audioContext;
+		
+		// Web Audio API（音声を事前に読み込んでおき、正確なタイミングで再生する）
+		var audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 		var audioBuffers = {};
-		function loadAudioBuffer(filename) {
-			if (!audioBuffers[filename]) {
-				audioBuffers[filename] = fetch(filename)
-					.then(function(response) {
-						if (!response.ok) {
-							throw new Error("音源を読み込めません: " + filename);
-						}
-						return response.arrayBuffer();
-					})
-					.then(function(data) {
-						return audioContext.decodeAudioData(data);
-					})
-					.catch(function(error) {
-						delete audioBuffers[filename];
-						throw error;
-					});
-			}
-			return audioBuffers[filename];
-		}
-		function stopChordSound(){
-			playbackId++;
-			for(var i = 0; i < playingSounds.length; i++){
-				try {
-					playingSounds[i].stop();
-				} catch (error) {
-					// すでに停止した音源は無視
+		
+		// chordsで使われる音声ファイルをすべて事前に読み込む
+		function preloadSounds() {
+			var playButton = document.getElementById("play_button");
+			var playLabel = playButton.lastChild;
+			playButton.disabled = true;
+			playLabel.textContent = "読み込み中...";
+			
+			// 使用するファイル名を重複なしで集める
+			var names = {};
+			for (var name in chords) {
+				for (var i = 0; i < 6; i++) {
+					var fret = chords[name][i];
+					if (fret != -1) {
+						names["audio/" + (i + 1) + "_" + fret + ".wav"] = true;
+					}
 				}
 			}
-			playingSounds = [];
+			
+			var files = Object.keys(names);
+			var loaded = 0;
+			var tasks = files.map(function(file) {
+				return fetch(file)
+					.then(function(res) {
+						if (!res.ok) {
+							throw new Error("HTTP " + res.status);
+						}
+						return res.arrayBuffer();
+					})
+					.then(function(data) { return audioCtx.decodeAudioData(data); })
+					.then(function(buffer) {
+						audioBuffers[file] = buffer;
+					})
+					.catch(function(e) {
+						console.error("読み込み失敗:", file, e);
+					})
+					.then(function() {
+						loaded++;
+						playLabel.textContent = "読み込み中 " + loaded + "/" + files.length;
+					});
+			});
+			
+			// すべて完了したらPlayボタンを有効にする
+			Promise.all(tasks).then(function() {
+				playButton.disabled = false;
+				playLabel.textContent = "Play";
+			});
+		}
+		
+		function stopChordSound(){
+			for(var i = 0; i < playingSources.length; i++){
+				try {
+					playingSources[i].stop();
+				} catch (e) {}
+			}
+			playingSources = [];
 		}
 		
 		// 選択されたラジオボタンからコードを組み立てる
@@ -565,7 +597,7 @@
 			document.querySelector('input[name="type"][value=""]').checked = true;
 		}
 		
-		async function playChord() {
+		function playChord() {
 			// コード未選択時にアラート表示
 			if (!recordChord) {
 				alert("コードを選択してください");
@@ -576,41 +608,28 @@
 			if (!fingering) {
 				return;
 			}
-			var currentPlaybackId = playbackId;
-			var filenames = [];
+			audioCtx.resume();  // ブラウザの自動再生制限への対策
+			var startTime = audioCtx.currentTime + 0.05;
+			var delay = 0;
 			for (var i = 5; i >= 0; i--) {
 				var fret = fingering[i];
 				if (fret == -1) {  // ミュート弦は再生しない
 					continue;
 				}
 				var stringNumber = i + 1;
-				filenames.push("audio/" + stringNumber + "_" + fret + ".wav");
-			}
-			try {
-				if (!audioContext) {
-					audioContext = new (window.AudioContext || window.webkitAudioContext)();
-				}
-				await audioContext.resume();
-				var buffers = await Promise.all(filenames.map(loadAudioBuffer));
-				if (currentPlaybackId != playbackId) {
-					return;
-				}
-				var startTime = audioContext.currentTime + 0.05;
-				for (var j = 0; j < buffers.length; j++) {
-					var source = audioContext.createBufferSource();
-					var gain = audioContext.createGain();
-					source.buffer = buffers[j];
+				var filename = "audio/" + stringNumber + "_" + fret + ".wav";
+				var buffer = audioBuffers[filename];
+				if (buffer) {
+					var source = audioCtx.createBufferSource();
+					var gain = audioCtx.createGain();
 					gain.gain.value = chordVolume;
+					source.buffer = buffer;
 					source.connect(gain);
-					gain.connect(audioContext.destination);
-					playingSounds.push(source);
-					source.start(startTime + j * 0.06);
+					gain.connect(audioCtx.destination);
+					source.start(startTime + delay / 1000);
+					playingSources.push(source);
 				}
-			} catch (error) {
-				if (currentPlaybackId == playbackId) {
-					console.error(error);
-					alert("音源を読み込めませんでした。ページを再読み込みしてお試しください。");
-				}
+				delay += 60;
 			}
 		}
 		
@@ -636,6 +655,7 @@
 			}
 			
 			updateRootLabels();
+			preloadSounds();
 		});
 	</script>
 </head>
